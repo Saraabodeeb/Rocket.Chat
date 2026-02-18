@@ -10,6 +10,8 @@ import { AuthorizationUtils } from '../../../app/authorization/lib/Authorization
 
 import './canAccessRoomLivechat';
 
+import { TOTP } from '../../../app/2fa/server/lib/totp';
+
 // Register as class
 export class Authorization extends ServiceClass implements IAuthorization {
 	protected name = 'authorization';
@@ -202,4 +204,20 @@ export class Authorization extends ServiceClass implements IAuthorization {
 
 		return Roles.isUserInRoles(userId, roleIds, scope);
 	}
+	async disable2FA(uid: string, code: string): Promise<boolean> {
+    const user = await Users.findOneById(uid);
+    if (!user?.services?.totp?.enabled) return false;
+
+    const verified = await TOTP.verify({
+        secret: user.services.totp.secret,
+        token: code,
+        userId: uid,
+        backupTokens: user.services.totp.hashedBackup,
+    });
+
+    if (!verified) return false;
+
+    const { modifiedCount } = await Users.disable2FAByUserId(uid);
+    return modifiedCount > 0;
+}
 }
